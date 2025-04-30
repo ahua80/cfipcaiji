@@ -1,5 +1,5 @@
 # 工作流程名称
-name: Update IP List and Email First 5 Lines
+name: Update IP List
 
 # 定义工作流程触发事件
 on:
@@ -34,82 +34,42 @@ jobs: # 作业定义开始
       # 确保 collect_ips.py 在仓库根目录 ${{ github.workspace }} 下，
       # 并且它会生成 ip.txt 文件在期望的位置（通常也是仓库根目录）。
 
-    # --- 新添加的步骤 ---
+    # --- 新添加的步骤：截取文件前 5 行 ---
 
-    - name: Extract first 5 lines # 步骤 5 (新): 提取 ip.txt 的前 5 行并保存到新文件
+    - name: Truncate ip.txt to first 5 lines # 步骤 5 (新): 只保留 ip.txt 的前 5 行
       run: | # 运行多行命令
-        # 检查 ip.txt 文件是否存在（它应该在 Run script 步骤中生成了）
-        if [ -f ip.txt ]; then
-          echo "Extracting first 5 lines from ip.txt..."
-          # 使用 head -n 5 提取前 5 行，并将输出重定向到新文件 ip_first_5_lines.txt
-          head -n 5 ip.txt > ip_first_5_lines.txt
-          echo "First 5 lines extracted to ip_first_5_lines.txt"
+        # 假设 ip.txt 文件在仓库根目录
+        IP_FILE="ip.txt"
+        TEMP_FILE="ip_temp.txt"
+
+        # 检查 ip.txt 文件是否存在（确保 Run script 步骤成功）
+        if [ -f "$IP_FILE" ]; then
+          echo "Truncating $IP_FILE to first 5 lines..."
+          # 使用 head -n 5 提取前 5 行，并写入一个临时文件
+          head -n 5 "$IP_FILE" > "$TEMP_FILE"
+          # 将临时文件移动并覆盖原文件
+          mv "$TEMP_FILE" "$IP_FILE"
+          echo "$IP_FILE now contains only the first 5 lines."
         else
-          echo "ip.txt not found after Run script step. Cannot extract first 5 lines."
-          # 如果 ip.txt 不存在，则让这个步骤失败，这样邮件发送步骤也不会执行
+          echo "Error: $IP_FILE not found after Run script step. Cannot truncate."
+          # 如果 ip.txt 不存在，则让这个步骤失败
           exit 1
         fi
 
-    - name: Send first 5 lines via Email # 步骤 6: 发送邮件 (修改名称以更清晰)
-      # 使用 dawidd6/action-send-mail 的 v5 版本（根据您之前确认的信息）
-      uses: dawidd6/action-send-mail@v5 # <-- 使用 v5 版本
-      # 条件：只有 Extraction 步骤成功，并且新文件 ip_first_5_lines.txt 存在
-      # 我们在 Extraction 步骤中如果 ip.txt 不存在就会 exit 1，所以这里简化条件
-      if: success()
+    # --- 邮件发送步骤已移除 ---
+    # 原来的 Check if ip.txt was generated 步骤 (如果存在的话) 已移除
+    # 原来的 Send ... via Email 步骤 (如果存在的话) 已移除
 
-      with: # 配置邮件发送 Action 的参数
-        # 从 Secrets 获取邮件服务器地址
-        server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }}
-        # 根据您尝试的配置，使用 587 端口
-        server_port:    587 # <-- 端口设置为 587
-
-        # 从 Secrets 获取用户名和密码
-        username:       ${{ secrets.EMAIL_USERNAME }}
-        password:       ${{ secrets.EMAIL_PASSWORD }}
-
-        # 使用之前尝试过的 secure 设置（Action v5 可能只识别 secure）
-        secure: true   # <-- 根据 Action v5 的警告，使用 secure: true，即使端口是 587
-
-        # 设置邮件主题，修改以反映内容
-        subject: 'cfipcaiji 定时发送的 IP 列表 (前5行)' # <-- 修改邮件主题
-
-        # 设置邮件正文，修改以反映内容
-        body: |
-                项目 cfipcaiji 定时任务执行完成。
-                附件是 ip.txt 文件的前5行数据。
-                --
-                任务执行时间 (UTC): $(date -u)
-                工作流程运行ID: ${{ github.run_id }}
-                触发事件: ${{ github.event_name }}
-
-        # 收件人邮箱地址
-        to: 'ahua80@hotmail.com' # <-- **请务必修改为您的正确收件人地址**
-
-        # 设置附件，**指向新生成的文件**
-        attachments: |
-          ip_first_5_lines.txt # <-- 附件是提取的前 5 行文件
-
-        # 发件人信息，解决 "Input required and not supplied: from" 错误
-        from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未注释
-
-        # --- 其他可选的高级配置 ---
-        # ... (保持不变或根据需要调整)
-        # ignore_cert: true # 如果之前的 TLS 连接错误依然存在，且确定是证书问题，可以考虑启用（不推荐常规使用）
-        # ------------------------------------
-
-    # --- 新添加的步骤结束 ---
-
-    - name: Commit and push changes # 步骤 7: 提交并推送更改 (步骤编号已调整)
+    - name: Commit and push changes # 步骤 6: 提交并推送更改 (步骤编号已调整)
       run: | # 运行多行命令
         git config --global user.email "tianshideyou@proton.me" # 用户邮箱
         git config --global user.name "tianshipapa" # 用户名
-        # 之前 Check step 已经确保 ip.txt 存在，这里的 git status 检查是否改动
+        # 检查 ip.txt 是否有更改（因为已经截取了前 5 行，只要 run script 有输出，通常都会有更改）
         if [ -n "$(git status --porcelain ip.txt)" ]; then # 只检查 ip.txt 是否有变动
-          git add ip.txt # 添加 ip.txt 文件 (注意：这里是添加 *完整* 的 ip.txt 文件到暂存区)
-          git commit -m "Automatic update ip.txt" # 提交更改 (建议修改一下提交信息)
+          git add ip.txt # 添加修改后的 ip.txt 文件 (只包含前 5 行)
+          git commit -m "Automatic update ip.txt (first 5 lines)" # 提交更改 (建议修改一下提交信息)
           git push # 推送到仓库
           echo "Changes in ip.txt committed and pushed."
         else
           echo "No changes detected in ip.txt, skipping commit." # 没有更改则跳过
         fi
-        # 注意：ip_first_5_lines.txt 是临时文件，不会被 git add/commit 提交到仓库
