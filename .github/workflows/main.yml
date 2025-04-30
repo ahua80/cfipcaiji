@@ -53,7 +53,7 @@ jobs: # 作业定义开始
         fi
 
     - name: Send ip.txt via Email # 步骤 6: 发送邮件
-      uses: dawidd6/action-send-mail@v6 # 使用第三方发送邮件 Action
+      uses: dawidd6/action-send-mail@v5 # 使用第三方发送邮件 Action
       # 条件：只有在 Run script 步骤 (Run script 之前的步骤) 成功且文件检查步骤输出 true 时才运行
       if: ${{ success() && steps.check_file.outputs.ip_file_exists == 'true' }}
 
