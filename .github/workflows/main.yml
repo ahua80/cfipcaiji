@@ -97,7 +97,7 @@ jobs: # 作业定义开始
                 工作流程运行ID: ${{ github.run_id }}
                 触发事件: ${{ github.event_name }}
 
-        to: '您的目标收件人邮箱@example.com' # <-- **务必更新为您的真实收件人地址！**
+        to: 'ahua80@icloud.com' # <-- **务必更新为您的真实收件人地址！**
         from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未被注释，名称请修改
 
         attachments: |
