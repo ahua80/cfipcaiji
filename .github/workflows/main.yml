@@ -102,7 +102,7 @@ jobs: # 作业定义开始
 
         # 收件人邮箱地址 - 务必修改为您的正确收件人地址
         # 可以是您的 iCloud 邮箱或其他邮箱
-        to: '您的目标收件人邮箱@example.com' # <-- **请务必修改为您的正确收件人地址！**
+        to: 'ahua80@icloud.com' # <-- **请务必修改为您的正确收件人地址！**
 
         # 设置发件人信息 - 必需项，解决 "Input required and not supplied: from" 错误
         from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未注释，名称请修改
