@@ -27,6 +27,56 @@ jobs:
         
     - name: Run script
       run: python ${{ github.workspace }}/collect_ips.py
+
+      - name: Check if ip.txt was generated
+      id: check_file # 给这个步骤一个ID，方便后续引用
+      run: |
+        # 假设 ip.txt 生成在仓库根目录
+        ip_file_path="ip.txt" # <-- 如果文件在子目录，请修改这里的路径，例如：'output/ip.txt'
+
+        echo "Checking for file: ${ip_file_path}"
+        if [ -f "$ip_file_path" ]; then
+          echo "ip.txt found at ${ip_file_path}."
+          echo "ip_file_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Error: ip.txt not found at ${ip_file_path} after script execution!"
+          echo "ip_file_exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    # 步骤: 发送邮件
+    - name: Send ip.txt via Email
+      uses: dawidd6/action-send-mail@v6
+      # 条件：只有在 Run script 步骤成功且文件检测为 true 时才运行
+      if: ${{ success() && steps.check_file.outputs.ip_file_exists == 'true' }}
+
+      with:
+        server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }}
+        server_port:    ${{ secrets.EMAIL_SERVER_PORT }}
+        username:       ${{ secrets.EMAIL_USERNAME }}
+        password:       ${{ secrets.EMAIL_PASSWORD }}
+        secure: true # <-- 请根据您的实际 SMTP 配置修改 (true 或 false)
+        # tls: true # <-- 如果不是 secure，可能是 tls，请根据您的配置选择其一并注释掉另一个
+
+        subject: 'cfipcaiji 定时发送的 IP 列表' # <-- 修改邮件主题
+        body: |
+                项目 cfipcaiji 定时任务执行完成。
+                ip.txt 文件已生成并作为附件发送。
+                --
+                任务执行时间 (UTC): $(date -u)
+                工作流程运行ID: ${{ github.run_id }}
+                触发事件: ${{ github.event_name }}
+                # 如果需要，可以显示提交信息，但对于 schedule 触发可能不相关
+                # 提交信息: ${{ github.event.head_commit.message }}
+
+        to: 'ahua80@hotmail.com' # <-- **请务必替换为实际的收件人邮箱地址**
+
+        attachments: |
+          ip.txt # <-- **如果 ip.txt 生成在子目录，请修改这里的路径，例如：'output/ip.txt'**
+
+        # 可选: 设置发件人名称
+        # from: '您的发件人名称 <${{ secrets.EMAIL_USERNAME }}>'
+
+    # --- 新增的步骤结束 ---
         
     - name: Commit and push changes
       run: |
