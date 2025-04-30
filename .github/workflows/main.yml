@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: '0 */3 * * *' # 每3小时运行一次 (UTC)
   workflow_dispatch: # 允许手动触发
-  # push: # 允许提交触发 (⚠️ 注意：此触发器与最后的 push 步骤结合可能导致无限循环，强烈建议继续移除或注释掉!)
+  # push: # 允许提交触发 (⚠️ 强烈建议移除此行，以避免与最后的 push 步骤结合导致无限循环！)
        # 如果您之前已经移除或注释掉了 push 触发器，请保持原样，或者删除此行。
 
 jobs: # 作业定义开始
@@ -17,35 +17,35 @@ jobs: # 作业定义开始
     steps: # 步骤列表开始，以下每个 '-' 开头的 step 都应该对齐到这个级别
 
     - name: Checkout code # 步骤 1: 检出代码
-      uses: actions/checkout@v3
+      uses: actions/checkout@v3 # 使用 actions/checkout@v3
 
     - name: Set up Python # 步骤 2: 设置 Python 环境
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v4 # 使用 actions/setup-python@v4
       with:
         python-version: '3.9' # 根据您的 collect_ips.py 需要的 Python 版本进行修改
 
     - name: Install dependencies # 步骤 3: 安装 Python 依赖
       run: | # 运行多行命令
         python -m pip install --upgrade pip
-        # 安装 collect_ips.py 所需库，根据您的实际 requirements 修改
+        # 安装 collect_ips.py 所需的 Python 库，根据您的实际 requirements 修改
         pip install requests
         pip install beautifulsoup4
 
-    - name: Run script # 步骤 4: 运行 collect_ips.py 脚本生成 ip.txt
+    - name: Run script # 步骤 4: 运行 collect_ips.py 脚本生成完整的 ip.txt
       run: python ${{ github.workspace }}/collect_ips.py
-      # 确保 collect_ips.py 在仓库根目录 ${{ github.workspace }} 下，
+      # 确保 collect_ips.py 在仓库的相对路径 ${{ github.workspace }} 下（通常就是仓库根目录）。
       # 并且它会生成完整的 ip.txt 文件在期望的位置（通常也是仓库根目录）。
 
-    # --- 新添加的步骤 ---
+    # --- 新添加的提取和邮件发送步骤 ---
 
     - name: Extract first 5 lines # 步骤 5: 提取 ip.txt 的前 5 行并保存到新文件
       run: | # 运行多行命令
-        # 假设 collect_ips.py 生成的 ip.txt 文件在仓库根目录
-        IP_FILE="ip.txt" # <-- 如果 ip.txt 生成在子目录，请修改这里的路径，例如：'output/ip.txt'
+        # 假设 collect_ips.py 生成的完整 ip.txt 文件在仓库根目录
+        IP_FILE="ip.txt" # <-- **如果 ip.txt 生成在子目录，请修改这里的路径，例如：'output/ip.txt'**
         FIRST_5_LINES_FILE="ip_first_5_lines.txt" # 生成的新文件名称
 
         echo "Attempting to extract first 5 lines from ${IP_FILE}..."
-        # 检查 ip.txt 文件是否存在
+        # 检查 ip.txt 文件是否存在（确保 Run script 步骤成功）
         if [ -f "$IP_FILE" ]; then
           # 使用 head -n 5 提取前 5 行，并将输出重定向到新文件
           head -n 5 "$IP_FILE" > "$FIRST_5_LINES_FILE"
@@ -57,33 +57,33 @@ jobs: # 作业定义开始
           else
             echo "${FIRST_5_LINES_FILE} is empty."
             echo "first_5_lines_exists=false" >> $GITHUB_OUTPUT
+            echo "Warning: Extracted file is empty. Email will not be sent."
           fi
         else
-          echo "Error: ${IP_FILE} not found after Run script step. Cannot extract first 5 lines."
+          echo "Error: ${IP_FILE} not found after Run script step. Cannot extract first 5 lines. Email will not be sent."
           echo "first_5_lines_exists=false" >> $GITHUB_OUTPUT
           # 如果 ip.txt 不存在，这个步骤不会失败，但后续发送邮件会因为文件不存在而跳过
           # 如果希望文件不存在就让整个任务失败，可以在这里加 exit 1
         fi
-      id: extract_lines # 给这个步骤一个ID，方便后续引用
+      id: extract_lines # 给这个步骤一个ID，方便后续引用，用于后续步骤的 if 条件
 
     - name: Send first 5 lines via Email # 步骤 6: 发送包含前 5 行的邮件
-      uses: dawidd6/action-send-mail@v5 # <-- 确保 Action 版本正确
+      # 使用 dawidd6/action-send-mail 的 v5 版本（根据您之前的确认）
+      uses: dawidd6/action-send-mail@v5 # <-- 确保使用的 Action 版本正确
 
-      ## 条件：只有 Extraction 步骤成功，并且检测到新文件 "ip_first_5_lines.txt" 存在且不为空 (#id: extract_lines)
+      ## 条件：只有 Extraction 步骤成功 (success())，并且检测到新文件 "ip_first_5_lines.txt" 存在且不为空 (#id: extract_lines)
       if: ${{ success() && steps.extract_lines.outputs.first_5_lines_exists == 'true' }}
 
       with: # 配置邮件发送 Action 的参数
         # SMTP 服务器配置，从 Secrets 中获取。确保 Secrets 已正确配置为 iCloud 邮箱信息。
-        # 关键修改：使用官方提供的服务器名称
-        server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }} # <-- 您的 Secrets 中 EMAIL_SERVER_ADDRESS 值应设为 smtp.mail.me.com
-        # 保持官方推荐的 587 端口
-        server_port:    587 # <-- 端口设置为 587
+        server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }} # 您的 Secrets 中 EMAIL_SERVER_ADDRESS 值应设为 smtp.mail.me.com
+        # 关键修改：我们将尝试使用 465 端口，配合 secure: true
+        server_port:    465 # <-- 端口设置为 465
 
         username:       ${{ secrets.EMAIL_USERNAME }} # 您的完整 iCloud 邮箱地址 (Secret)
-        password:       ${{ secrets.EMAIL_PASSWORD }} # <-- **iCloud 应用专用密码** (Secret)
+        password:       ${{ secrets.EMAIL_PASSWORD }} # <-- **请务必使用为 GitHub Actions 生成的 iCloud 应用专用密码**，不是主要 Apple ID 密码
 
-        # 加密方式：按照 Action V5 参数，保持 secure: true
-        # 这在 587 端口下理论上会尝试 STARTTLS。
+        # 加密方式：使用 secure: true 配合 465 端口 (隐式 TLS/SSL)
         secure: true   # <-- 使用 Action v5 接受的 secure 参数
         # tls: true    # <-- Action v5 不支持 tls 参数，请保持注释
 
@@ -97,27 +97,43 @@ jobs: # 作业定义开始
                 工作流程运行ID: ${{ github.run_id }}
                 触发事件: ${{ github.event_name }}
 
-        to: 'ahua80@icloud.com' # <-- **务必更新为您的真实收件人地址！**
-        from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未被注释，名称请修改
+        # 收件人邮箱地址 - 已为您填充为 ahua80@icloud.com
+        to: 'ahua80@icloud.com' # <-- 您的指定收件人邮箱地址
 
+        # 设置发件人信息 - 这是解决 "Input required and not supplied: from" 错误的必需项
+        from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未被注释，名称您可以修改。它将显示为 '自定义名称 <您的iCloud邮箱>'
+
+        # 设置附件，指定新生成的包含前 5 行的文件路径
+        # 文件路径是相对于 GitHub Actions 工作目录 (通常是仓库根目录 ${GITHUB_WORKSPACE})
         attachments: |
-          ip_first_5_lines.txt # <-- 确保路径正确
-        # ... 其他可选参数 ...
+          ip_first_5_lines.txt # <-- **如果文件生成在子目录，需要修改这里的路径**
 
-    # --- 新建步骤结束 ---
+        # --- 其他可选的高级配置 ---
+        # cc: '' # 抄送
+        # bcc: '' # 密送
+        # reply_to: '' # 回复到地址
+        # ignore_cert: true # 如果遇到证书问题，可以尝试启用（不安全，仅用于调试或特殊环境）
+        # priority: 'normal' # 邮件优先级: 'high', 'normal', 'low'
+        # nodemailerlog: false # 启用 Nodemailer 内部日志（非常详细，用于调试）
+        # nodemailerdebug: false # 启用 Nodemailer debug 模式
+        # envelope_from: '' # SMTP MAIL FROM 指定
+        # envelope_to: '' # SMTP RCPT TO 指定
 
-    - name: Commit and push changes # 步骤 7: 提交并推送完整 ip.txt 更改
+    # --- 新添加的提取和邮件发送步骤结束 ---
+
+    - name: Commit and push changes # 步骤 7: 提交并推送完整的 ip.txt 更改到仓库
+      # 这个步骤会将 Running script 生成的原始 (未被截断) ip.txt 提交到仓库
       run: | # 运行多行命令
-        git config --global user.email "tianshideyou@proton.me" # 用户邮箱
-        git config --global user.name "tianshipapa" # 用户名
+        git config --global user.email "tianshideyou@proton.me" # Git 用户邮箱
+        git config --global user.name "tianshipapa" # Git 用户名
         # 检查原始 ip.txt 文件是否有更改（因为 run script step 进行了更新）
         IP_FILE="ip.txt" # <-- 如果 ip.txt 在子目录，请修改这里的路径
         if [ -f "$IP_FILE" ] && [ -n "$(git status --porcelain "$IP_FILE")" ]; then # 检查文件存在且有变动
-          git add "$IP_FILE" # 添加修改后的 ip.txt 文件 (注意：这里是添加 *完整* 的 ip.txt 文件到暂存区)
-          git commit -m "Automatic update ip.txt" # 提交更改 (建议修改一下提交信息)
-          git push # 推送到仓库 - **注意这里的无限循环风险 if on: push: is enabled!**
+          git add "$IP_FILE" # 添加修改后 (由 Run script 生成) 的 ip.txt 文件
+          git commit -m "Automatic update ip.txt" # 提交更改 (提交信息您可以修改)
+          git push # 推送到仓库 - **小心无限循环风险!**
           echo "Changes in $IP_FILE committed and pushed."
         else
           echo "No changes detected in $IP_FILE, skipping commit." # 没有更改或文件不存在则跳过
         fi
-        # 注意：ip_first_5_lines.txt (只包含前5行) 是临时文件，不会被 git add/commit 提交到仓库
+        # 注意：ip_first_5_lines.txt (只包含前5行的临时文件) 在这里不会被提交到仓库。
