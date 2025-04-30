@@ -1,64 +1,75 @@
+# 工作流程名称
 name: Update IP List
 
+# 定义工作流程触发事件
 on:
   schedule:
-    - cron: '0 */3 * * *' # 每3小时运行一次
+    - cron: '0 */3 * * *' # 每3小时运行一次 (UTC)
   workflow_dispatch: # 允许手动触发
-  push: # 允许提交触发
+  push: # 允许提交触发 (⚠️ 注意：此触发器与最后的 push 步骤结合可能导致无限循环，强烈建议移除)
 
-jobs:
+jobs: # 作业定义开始
 
-  update-ip-list:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-      
-    - name: Set up Python
+  update-ip-list: # 单个作业名称
+    runs-on: ubuntu-latest # 作业运行环境
+
+    steps: # 步骤列表开始，以下每个 '-' 开头的 step 都应该对齐到这个级别
+
+    - uses: actions/checkout@v3 # 步骤 1: 检出代码
+
+    - name: Set up Python # 步骤 2: 设置 Python 环境
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
-        
-    - name: Install dependencies
-      run: |
+        python-version: '3.9' # 根据需要修改 Python 版本
+
+    - name: Install dependencies # 步骤 3: 安装依赖
+      run: | # 运行多行命令
         python -m pip install --upgrade pip
         pip install requests
-        pip install beautifulsoup4
-        
-    - name: Run script
-      run: python ${{ github.workspace }}/collect_ips.py
+        pip install beautifulsoup4 # 根据 collect_ips.py 的实际依赖修改
 
-      - name: Check if ip.txt was generated
+    - name: Run script # 步骤 4: 运行生成 ip.txt 的脚本
+      run: python ${{ github.workspace }}/collect_ips.py
+      # 确保 collect_ips.py 在仓库根目录 ${{ github.workspace }} 下，
+      # 并且它会生成 ip.txt 文件在期望的位置（通常也是仓库根目录）。
+
+    # --- 新增的步骤 (请注意正确的缩进) ---
+
+    - name: Check if ip.txt was generated # 步骤 5: 检查 ip.txt 是否存在
       id: check_file # 给这个步骤一个ID，方便后续引用
-      run: |
-        # 假设 ip.txt 生成在仓库根目录
+      run: | # 运行多行命令
+        # 默认假设 ip.txt 生成在仓库根目录 (即当前工作目录)
         ip_file_path="ip.txt" # <-- 如果文件在子目录，请修改这里的路径，例如：'output/ip.txt'
 
         echo "Checking for file: ${ip_file_path}"
-        if [ -f "$ip_file_path" ]; then
+        if [ -f "$ip_file_path" ]; then # 检查文件是否存在
           echo "ip.txt found at ${ip_file_path}."
+          # 设置一个输出变量，以便后续步骤引用
           echo "ip_file_exists=true" >> $GITHUB_OUTPUT
         else
           echo "Error: ip.txt not found at ${ip_file_path} after script execution!"
           echo "ip_file_exists=false" >> $GITHUB_OUTPUT
+          # 文件不存在不让整个任务失败，方便查看日志
         fi
 
-    # 步骤: 发送邮件
-    - name: Send ip.txt via Email
-      uses: dawidd6/action-send-mail@v6
-      # 条件：只有在 Run script 步骤成功且文件检测为 true 时才运行
+    - name: Send ip.txt via Email # 步骤 6: 发送邮件
+      uses: dawidd6/action-send-mail@v6 # 使用第三方发送邮件 Action
+      # 条件：只有在 Run script 步骤 (Run script 之前的步骤) 成功且文件检查步骤输出 true 时才运行
       if: ${{ success() && steps.check_file.outputs.ip_file_exists == 'true' }}
 
-      with:
+      with: # 配置邮件发送 Action
         server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }}
         server_port:    ${{ secrets.EMAIL_SERVER_PORT }}
         username:       ${{ secrets.EMAIL_USERNAME }}
         password:       ${{ secrets.EMAIL_PASSWORD }}
-        secure: true # <-- 请根据您的实际 SMTP 配置修改 (true 或 false)
+
+        # 加密方式：请根据您的 SMTP 服务器要求修改这里
+        # 通常 465 端口用 secure: true； 587 端口用 tls: true
+        secure: true # <-- **请根据您的实际 SMTP 配置修改，可能是 true 或 false**
         # tls: true # <-- 如果不是 secure，可能是 tls，请根据您的配置选择其一并注释掉另一个
 
         subject: 'cfipcaiji 定时发送的 IP 列表' # <-- 修改邮件主题
-        body: |
+        body: | # 多行邮件正文
                 项目 cfipcaiji 定时任务执行完成。
                 ip.txt 文件已生成并作为附件发送。
                 --
@@ -68,24 +79,26 @@ jobs:
                 # 如果需要，可以显示提交信息，但对于 schedule 触发可能不相关
                 # 提交信息: ${{ github.event.head_commit.message }}
 
-        to: 'ahua80@hotmail.com' # <-- **请务必替换为实际的收件人邮箱地址**
+        to: 'ahua80@hotmail.com' # <-- **收件人邮箱已设置，请确认这是正确地址**
 
+        # 附件路径：必须是相对于 GitHub Actions 工作目录 (仓库根目录) 的相对路径
         attachments: |
-          ip.txt # <-- **如果 ip.txt 生成在子目录，请修改这里的路径，例如：'output/ip.txt'**
+          ip.txt # <-- **如果 ip.txt 生成在子目录，需要修改这里的路径，例如：'output/ip.txt'**
 
-        # 可选: 设置发件人名称
+        # 可选: 设置发件人名称，如果需要可以取消注释并修改
         # from: '您的发件人名称 <${{ secrets.EMAIL_USERNAME }}>'
 
-    # --- 新增的步骤结束 ---
-        
-    - name: Commit and push changes
-      run: |
-        git config --global user.email "tianshideyou@proton.me"
-        git config --global user.name "tianshipapa"
-        if [ -n "$(git status --porcelain)" ]; then
-          git add ip.txt
-          git commit -m "Automatic update"
-          git push
+    # --- 新增的步骤结束 --- # 注意这里没有额外的缩进或分隔符
+
+    - name: Commit and push changes # 步骤 7: 提交并推送更改
+      run: | # 运行多行命令
+        git config --global user.email "tianshideyou@proton.me" # 用户邮箱
+        git config --global user.name "tianshipapa" # 用户名
+        if [ -n "$(git status --porcelain)" ]; then # 检查是否有更改
+          git add ip.txt # 添加 ip.txt 文件
+          git commit -m "Automatic update" # 提交更改
+          git push # 推送到仓库
+          echo "Changes committed and pushed."
         else
-          echo "No changes detected, skipping commit."
+          echo "No changes detected, skipping commit." # 没有更改则跳过
         fi
