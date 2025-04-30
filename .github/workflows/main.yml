@@ -66,33 +66,30 @@ jobs: # 作业定义开始
         fi
       id: extract_lines # 给这个步骤一个ID，方便后续引用
 
-    - name: Send first 5 lines via Email # 步骤 6: 发送邮件
-      # 使用 dawidd6/action-send-mail 的 v5 版本
+    - name: Send first 5 lines via Email # 步骤 6: 发送包含前 5 行的邮件
       uses: dawidd6/action-send-mail@v5 # <-- 确保 Action 版本正确
 
-      ## 条件：只有 Extraction 步骤成功，并且检测到新文件 "ip_first_5_lines.txt" 存在且不为空
-      ## 通过 steps.extract_lines.outputs.first_5_lines_exists 检查上一步的输出
+      ## 条件：只有 Extraction 步骤成功，并且检测到新文件 "ip_first_5_lines.txt" 存在且不为空 (#id: extract_lines)
       if: ${{ success() && steps.extract_lines.outputs.first_5_lines_exists == 'true' }}
 
       with: # 配置邮件发送 Action 的参数
         # SMTP 服务器配置，从 Secrets 中获取。确保 Secrets 已正确配置为 iCloud 邮箱信息。
-        server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }} # 比如 smtp.mail.me.com 或 smtp.icloud.com
-        server_port:    587 # <-- 尝试使用 587 端口 (iCloud 推荐)
-        username:       ${{ secrets.EMAIL_USERNAME }} # 您的完整 iCloud 邮箱地址
-        password:       ${{ secrets.EMAIL_PASSWORD }} # <-- **iCloud 应用专用密码**，不是主要 Apple ID 密码
+        # 关键修改：使用官方提供的服务器名称
+        server_address: ${{ secrets.EMAIL_SERVER_ADDRESS }} # <-- 您的 Secrets 中 EMAIL_SERVER_ADDRESS 值应设为 smtp.mail.me.com
+        # 保持官方推荐的 587 端口
+        server_port:    587 # <-- 端口设置为 587
 
-        # 加密方式：根据 Action v5 的参数和 iCloud 常规配置
-        # iCloud SMTP (587) 常使用 STARTTLS (显式 TLS)。Action v5 使用 secure 控制加密。
-        # 结合 587 端口和 secure: true，Action 可能会尝试 STARTTLS。
-        # 如果遇到 TLS 错误 (wrong version number)，可能需要调整端口或 secure/tls 设置。
+        username:       ${{ secrets.EMAIL_USERNAME }} # 您的完整 iCloud 邮箱地址 (Secret)
+        password:       ${{ secrets.EMAIL_PASSWORD }} # <-- **iCloud 应用专用密码** (Secret)
+
+        # 加密方式：按照 Action V5 参数，保持 secure: true
+        # 这在 587 端口下理论上会尝试 STARTTLS。
         secure: true   # <-- 使用 Action v5 接受的 secure 参数
         # tls: true    # <-- Action v5 不支持 tls 参数，请保持注释
 
-        # 设置邮件主题
         subject: 'cfipcaiji 定时发送的 IP 列表 (前5行)' # <-- 您可以修改邮件主题
 
-        # 设置邮件正文
-        body: |
+        body: | # 使用多行文本定义正文
                 项目 cfipcaiji 定时任务执行完成。
                 附件是 ip.txt 文件的前5行数据。
                 --
@@ -100,28 +97,12 @@ jobs: # 作业定义开始
                 工作流程运行ID: ${{ github.run_id }}
                 触发事件: ${{ github.event_name }}
 
-        # 收件人邮箱地址 - 务必修改为您的正确收件人地址
-        # 可以是您的 iCloud 邮箱或其他邮箱
-        to: 'ahua80@icloud.com' # <-- **请务必修改为您的正确收件人地址！**
+        to: '您的目标收件人邮箱@example.com' # <-- **务必更新为您的真实收件人地址！**
+        from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未被注释，名称请修改
 
-        # 设置发件人信息 - 必需项，解决 "Input required and not supplied: from" 错误
-        from: 'cfipcaiji GitHub Actions <${{ secrets.EMAIL_USERNAME }}>' # <-- 确保这行存在且未注释，名称请修改
-
-        # 设置附件，指向新生成的文件
-        # 文件路径是相对于 GitHub Actions 工作目录 (通常是仓库根目录 ${GITHUB_WORKSPACE})
         attachments: |
-          ip_first_5_lines.txt # <-- **如果文件生成在子目录，需要修改这里的路径**
-
-        # --- 其他可选的高级配置 ---
-        # cc: ''
-        # bcc: ''
-        # reply_to: ''
-        # ignore_cert: true # 如果遇到证书问题，可以尝试启用，但不安全
-        # priority: 'normal'
-        # nodemailerlog: false
-        # nodemailerdebug: false
-        # envelope_from: ''
-        # envelope_to: ''
+          ip_first_5_lines.txt # <-- 确保路径正确
+        # ... 其他可选参数 ...
 
     # --- 新建步骤结束 ---
 
